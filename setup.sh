@@ -4,24 +4,30 @@
 # installing setting up a virtualenv and importing requirements.txt into pip.
 # Can be run multiple times, it is written to be idempotent.
 #
-# Version 1.1.1
+# Version 1.5.0
 
 this_file=`basename "$0"`
+this_path=`cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd`
+this_dir=`basename "$this_path"`
+
+project_name="${this_dir}"
 required_minimum_python_version_major=''
 required_minimum_python_version_minor=''
 required_minimum_python_version_minor_minor=''
-project_virtualenv_path=".venv" 
-environment_json_file="./environment.json"
+virtualenvs_dir="/usr/lib/virtualenvs"
+project_virtualenv_path="${virtualenvs_dir}/${project_name}" 
+environment_json_file="./app/environment.json"
+individual_setup_files_dir="./setup"
 
 # option_force=
 # parse_options () {
-# 	while getopts "f" opt; do
-# 		case $opt in
-# 			f)
-# 				option_force="true"
-# 				;;
-# 		esac
-# 	done
+#	while getopts "f" opt; do
+#		case $opt in
+#			f)
+#				option_force="true"
+#				;;
+#		esac
+#	done
 # } ; parse_options $@
 
 set -o nounset
@@ -82,13 +88,23 @@ verify_python_version () {
 	fi
 }
 
-install_virtualenv_package_if_needed () {
+verify_virtualenv_binary_installed () {
 	if ! which virtualenv 1>/dev/null; then
 		error "Required python package virtualenv not installed."
 	fi
 }
 
-create_virtualenv_if_needed () {
+create_system_virtualenvs_dir_if_needed () {
+	if [[ -d "$virtualenvs_dir" ]]; then
+		return 0
+	fi
+
+	if ! mkdir "$virtualenvs_dir"; then
+		error "Could not create common virtualenv dir, 'mkdir ${$virtualenvs_dir}'."
+	fi
+}
+
+create_project_virtualenv_if_needed () {
 	if [[ -d "$project_virtualenv_path" ]]; then
 		return 0
 	fi
@@ -113,6 +129,8 @@ install_pip_packages_into_virtualenv_if_requires_file () {
 }
 
 create_json_file_with_environment_information () {
+	# TODO: Deprecated
+	# Original use for environment.json file no longer needed.
 	if [[ -f "${environment_json_file}" ]]; then
 		if ! rm "${environment_json_file}"; then
 			error "Could not remove environment JSON file, '${environment_json_file}'."
@@ -128,11 +146,16 @@ create_json_file_with_environment_information () {
 	# python version in the path, e.g. ".venv/lib/python2.7/site-packages/".
 	site_packages_path=`${project_virtualenv_path}/bin/python -c "from distutils.sysconfig import get_python_lib; print(get_python_lib())"`
 	site_packages_dir=`echo ${site_packages_path} | sed -e "s#$(pwd)/##"`
+
+	# virtualenv path may be relative, this makes sure the path is absolute.
+	original_pwd=`pwd`
+	project_virtualenv_abspath=`cd ${project_virtualenv_path}; pwd`
+	cd "$original_pwd"
 	
 	env_data="{"
 	env_data="${env_data} \"base_path\": \"`pwd`\", "
 	env_data="${env_data} \"virtualenv_dir\": \"${project_virtualenv_path}\", "
-	env_data="${env_data} \"virtualenv_path\": \"`pwd`/${project_virtualenv_path}\", "
+	env_data="${env_data} \"virtualenv_path\": \"${project_virtualenv_abspath}\", "
 	env_data="${env_data} \"site_packages_dir\": \"${site_packages_dir}\", "
 	env_data="${env_data} \"site_packages_path\": \"${site_packages_path}\" "
 	env_data="${env_data} }"
@@ -141,8 +164,19 @@ create_json_file_with_environment_information () {
 	echo ${env_data} | python -mjson.tool > ${environment_json_file}
 }
 
+execute_individual_setup_files () {
+	if [[ ! -d "${individual_setup_files_dir}" ]]; then
+		return 0
+	fi
+
+	find "`pwd`/${individual_setup_files_dir}" -maxdepth 1 -type f | while read filename; do
+		source "${filename}"
+	done
+}
+
 verify_python_version
-install_virtualenv_package_if_needed
-create_virtualenv_if_needed
+verify_virtualenv_binary_installed
+create_system_virtualenvs_dir_if_needed
+create_project_virtualenv_if_needed
 install_pip_packages_into_virtualenv_if_requires_file
-create_json_file_with_environment_information
+execute_individual_setup_files
