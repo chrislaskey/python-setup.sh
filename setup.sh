@@ -4,7 +4,7 @@
 # installing setting up a virtualenv and importing requirements.txt into pip.
 # Can be run multiple times, it is written to be idempotent.
 #
-# Version 1.5.1
+# Version 1.5.2
 
 this_file=`basename "$0"`
 this_path=`cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd`
